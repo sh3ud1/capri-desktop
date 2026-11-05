@@ -3806,7 +3806,7 @@ namespace CapriDesktop
             {
                 string normalized = Regex.Replace(Plain(wanted), @"^the |( app| application| game)$", "");
                 List<InstalledApp> found = Match(Apps(), wanted);
-                found.RemoveAll(app => Score(app, normalized) < 2);
+                found.RemoveAll(app => Score(app, normalized) < 4);
                 if (found.Count == 0)
                 {
                     string nickname = Nickname(wanted);
@@ -3814,7 +3814,7 @@ namespace CapriDesktop
                     {
                         normalized = Plain(nickname);
                         found = Match(Apps(), nickname);
-                        found.RemoveAll(app => Score(app, normalized) < 2);
+                        found.RemoveAll(app => Score(app, normalized) < 4);
                     }
                 }
                 if (found.Count == 0) return "No installed app exactly matches " + wanted.Trim() + ". Use /apps to see available names.";
@@ -3840,7 +3840,7 @@ namespace CapriDesktop
             {
                 string normalized = Regex.Replace(Plain(wanted), @"^the |( app| application| game)$", "");
                 List<InstalledApp> found = Match(Apps(), wanted);
-                found.RemoveAll(app => Score(app, normalized) < 2);
+                found.RemoveAll(app => Score(app, normalized) < 4);
                 if (found.Count == 0) return "No installed app exactly matches " + wanted.Trim() + ". Use /apps to see available names.";
                 if (found.Count > 1)
                 {
