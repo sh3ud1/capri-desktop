@@ -958,6 +958,8 @@ namespace CapriDesktop
         [DataMember] public bool VoiceRetuned;
         // Her notes file when it's a note in their Obsidian vault, or null for me.md in her own folder.
         [DataMember] public string Vault;
+        [DataMember] public string TelegramToken;
+        [DataMember] public long TelegramUserId;
 
         // A new install: she starts in the PC's own language when she speaks it, and with her tuned voice.
         internal static Preferences Fresh()
@@ -1685,6 +1687,7 @@ namespace CapriDesktop
         private readonly bool testing;
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private Preferences preferences;
+        private TelegramBridge telegram;
         private readonly ClipBuffer clips = new ClipBuffer();
         private ClipToast clipToast;
         private int clipsChimed;
@@ -2407,6 +2410,8 @@ namespace CapriDesktop
                 drop.ShowCheckMargin = parent != helpItem;
             }
             menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("Telegram remote access", null, delegate { ShowTelegramSettings(); }));
+            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(new ToolStripMenuItem("Quit Capri", null, delegate { Quit(); }));
             menu.Opened += delegate { Computer.MenuOpen = true; };
             menu.Closed += delegate { Computer.MenuOpen = false; };
@@ -2677,6 +2682,7 @@ namespace CapriDesktop
                 FirstLaunch();
             }
             if (!testing) StartHeartbeat();
+            if (!testing && !string.IsNullOrEmpty(preferences.TelegramToken) && preferences.TelegramUserId > 0) StartTelegram();
             if (!testing) FindBrain();
             if (!testing) DefaultStartup(Installed());
             if (!testing) GreetSoon();
@@ -2758,7 +2764,32 @@ namespace CapriDesktop
             if (!quitting && !testing && !shutdown) Brain.Log("quit", -1, "Her window was closed from outside Capri (" + e.CloseReason + ").");
             // Windows asks before it shuts down, and the shutdown can still be called off, so that doesn't start her quit clock
             // or clear her running marker: WM_ENDSESSION clears it once the shutdown is certain.
-            if (!e.Cancel) { quitting = true; if (!shutdown) ClearMarks(); if (heartbeat != null && !shutdown) heartbeat.Closing(); ClonesOff(); CheckKeepAwake(); Computer.Close(); callEars.Stop(); }
+            if (!e.Cancel) { if (telegram != null) { telegram.Dispose(); telegram = null; } quitting = true; if (!shutdown) ClearMarks(); if (heartbeat != null && !shutdown) heartbeat.Closing(); ClonesOff(); CheckKeepAwake(); Computer.Close(); callEars.Stop(); }
+        }
+
+        private void ShowTelegramSettings()
+        {
+            using (TelegramSettingsDialog dialog = new TelegramSettingsDialog(Voice.Unprotect(preferences.TelegramToken), preferences.TelegramUserId))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                preferences.TelegramToken = Voice.Protect(dialog.BotToken);
+                preferences.TelegramUserId = dialog.UserId;
+                SavePreferences();
+                if (telegram != null) { telegram.Dispose(); telegram = null; }
+                StartTelegram();
+            }
+        }
+
+        private void StartTelegram()
+        {
+            try
+            {
+                string token = Voice.Unprotect(preferences.TelegramToken);
+                if (string.IsNullOrEmpty(token) || preferences.TelegramUserId <= 0) return;
+                telegram = new TelegramBridge(token, preferences.TelegramUserId);
+                telegram.Start();
+            }
+            catch (Exception) { telegram = null; }
         }
 
         private void Tick()
