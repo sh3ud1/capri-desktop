@@ -123,17 +123,50 @@ namespace CapriDesktop
                             if (!Allowed(message)) continue;
 
                             string command = (message.text ?? "").Trim();
-                            int mention = command.IndexOf('@');
-                            int space = command.IndexOf(' ');
-                            int end = command.Length;
-                            if (mention >= 0 && mention < end) end = mention;
-                            if (space >= 0 && space < end) end = space;
-                            string verb = command.Substring(0, end).ToLowerInvariant();
+                            int split = command.IndexOfAny(new char[] { ' ', '\t', '\r', '\n' });
+                            string head = split < 0 ? command : command.Substring(0, split);
+                            string argument = split < 0 ? "" : command.Substring(split).Trim();
+                            int mention = head.IndexOf('@');
+                            if (mention >= 0) head = head.Substring(0, mention);
+                            string verb = head.ToLowerInvariant();
 
                             if (verb == "/start" || verb == "/help")
-                                Send(message.chat.id, "Capri is linked. Commands: /status, /help. Remote actions are not enabled yet.");
+                                Send(message.chat.id, "Capri is linked. Commands:\n/status — connection status\n/apps — list installed apps\n/open name — open an installed app\n/close name — close its windows\n/screenshot — send a screenshot\n/lock — lock this PC");
                             else if (verb == "/status")
                                 Send(message.chat.id, "Capri is running. Telegram connection is active.");
+                            else if (verb == "/apps")
+                                Send(message.chat.id, Hands.TelegramApps());
+                            else if (verb == "/open")
+                                Send(message.chat.id, SecurityEnabled(Security.Open)
+                                    ? Hands.TelegramOpenApp(argument)
+                                    : "Opening apps is disabled in Capri's SECURITY settings.");
+                            else if (verb == "/close")
+                                Send(message.chat.id, SecurityEnabled(Security.Windows)
+                                    ? Hands.TelegramCloseApp(argument)
+                                    : "Closing apps is disabled in Capri's SECURITY settings.");
+                            else if (verb == "/screenshot")
+                            {
+                                if (!SecurityEnabled(Security.Shortcuts))
+                                    Send(message.chat.id, "Screenshots are disabled in Capri's SECURITY settings.");
+                                else
+                                {
+                                    Picture picture = Computer.Snap(null);
+                                    if (picture == null || picture.Jpeg == null)
+                                        Send(message.chat.id, "Capri couldn't capture the screen. It may be locked or unavailable.");
+                                    else SendPhoto(message.chat.id, picture.Jpeg);
+                                }
+                            }
+                            else if (verb == "/lock")
+                            {
+                                if (!SecurityEnabled(Security.Power))
+                                    Send(message.chat.id, "Locking the PC is disabled in Capri's SECURITY settings.");
+                                else
+                                    Send(message.chat.id, Hands.TelegramLock()
+                                        ? "The PC has been locked."
+                                        : "Windows couldn't lock the PC.");
+                            }
+                            else
+                                Send(message.chat.id, "Unknown command. Send /help to see the available commands.");
                         }
                     }
                 }
@@ -193,6 +226,55 @@ namespace CapriDesktop
             request.ContentType = "application/x-www-form-urlencoded";
             request.ContentLength = body.Length;
             request.Timeout = 15000;
+            request.Proxy = WebRequest.DefaultWebProxy;
+            lock (requestLock)
+            {
+                if (stopping) return;
+                activeRequest = request;
+            }
+            try
+            {
+                using (Stream stream = request.GetRequestStream()) stream.Write(body, 0, body.Length);
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse()) { }
+            }
+            finally
+            {
+                lock (requestLock) if (activeRequest == request) activeRequest = null;
+            }
+        }
+
+        private static bool SecurityEnabled(int toggle)
+        {
+            return Security.Has(toggle) && Security.On(toggle);
+        }
+
+        private void SendPhoto(long chatId, byte[] jpeg)
+        {
+            if (stopping || jpeg == null || jpeg.Length == 0) return;
+            string boundary = "----CapriTelegram" + Guid.NewGuid().ToString("N");
+            byte[] body;
+            using (MemoryStream payload = new MemoryStream())
+            {
+                byte[] header = Encoding.UTF8.GetBytes("--" + boundary + "\r\n"
+                    + "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n"
+                    + chatId.ToString() + "\r\n"
+                    + "--" + boundary + "\r\n"
+                    + "Content-Disposition: form-data; name=\"photo\"; filename=\"capri.jpg\"\r\n"
+                    + "Content-Type: image/jpeg\r\n\r\n");
+                payload.Write(header, 0, header.Length);
+                payload.Write(jpeg, 0, jpeg.Length);
+                byte[] footer = Encoding.ASCII.GetBytes("\r\n--" + boundary + "--\r\n");
+                payload.Write(footer, 0, footer.Length);
+                body = payload.ToArray();
+            }
+
+            string url = "https://api.telegram.org/bot" + token + "/sendPhoto";
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "POST";
+            request.ContentType = "multipart/form-data; boundary=" + boundary;
+            request.ContentLength = body.Length;
+            request.Timeout = 30000;
+            request.ReadWriteTimeout = 30000;
             request.Proxy = WebRequest.DefaultWebProxy;
             lock (requestLock)
             {
