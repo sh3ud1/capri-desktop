@@ -4,6 +4,8 @@
 
 The app has no analytics, no crash reports and no usage pings. We never receive your chat logs, transcriptions, screenshots, files, keys or notes.
 
+Optional Telegram remote access is different: when you turn it on, Capri receives your bot commands through Telegram and sends screenshots you request to your configured bot chat. Telegram receives that command text, chat/account metadata, the requested screenshots and ordinary connection details under Telegram's own privacy policy. The bot token is stored locally encrypted for your Windows account. Only the one paired Telegram account in a private chat is accepted. The current integration is limited to status, installed-app listing, opening and closing installed apps, screenshots and locking the PC; it does not expose a terminal or general file access. You can disable it from Capri's Telegram settings.
+
 Your settings, chats, transcripts, notes and error logs stay on your PC, in `%LOCALAPPDATA%\Capri` on Windows. Keys you save are encrypted for your Windows account. On Mac and Linux they sit unencrypted in local files that only your account can read. If you pick an Obsidian vault for her notes, they live in that vault instead, and go wherever your vault syncs.
 
 The [code is public](https://github.com/lachydotmcg/capri-desktop), so you can check all of this yourself.
@@ -36,6 +38,7 @@ GitHub hosts the website and the downloads. Cloudflare runs the counters and the
 | Windows online speech | Microsoft, through Windows | During voice chat, when her own ears aren't ready or don't cover your language, if online speech is on in Windows |
 | Searches, music and web links | DuckDuckGo, YouTube and the sites you ask for | When you ask for a search, a song or a site, or press a link. Your search words go to that site |
 | Discord status | The Discord app on your PC | On by default. She passes her activity text, version, start time and links, and Discord shares your status |
+| Optional Telegram remote access | Telegram Bot API (`api.telegram.org`) | Only after you configure and pair a bot: commands and replies go through Telegram; requested screenshots are sent to your bot chat |
 
 Anything online sees ordinary connection details, such as your IP address and the address asked for.
 
