@@ -184,6 +184,7 @@ namespace CapriDesktop
 
         private void Send(long chatId, string text)
         {
+            if (stopping) return;
             byte[] body = Encoding.UTF8.GetBytes("chat_id=" + Uri.EscapeDataString(chatId.ToString())
                 + "&text=" + Uri.EscapeDataString(text));
             string url = "https://api.telegram.org/bot" + token + "/sendMessage";
@@ -193,8 +194,20 @@ namespace CapriDesktop
             request.ContentLength = body.Length;
             request.Timeout = 15000;
             request.Proxy = WebRequest.DefaultWebProxy;
-            using (Stream stream = request.GetRequestStream()) stream.Write(body, 0, body.Length);
-            using (HttpWebResponse response = (HttpWebResponse)request.GetResponse()) { }
+            lock (requestLock)
+            {
+                if (stopping) return;
+                activeRequest = request;
+            }
+            try
+            {
+                using (Stream stream = request.GetRequestStream()) stream.Write(body, 0, body.Length);
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse()) { }
+            }
+            finally
+            {
+                lock (requestLock) if (activeRequest == request) activeRequest = null;
+            }
         }
 
         public void Dispose()
@@ -206,9 +219,10 @@ namespace CapriDesktop
                 if (activeRequest != null)
                     try { activeRequest.Abort(); } catch (Exception) { }
             }
-            if (worker != null && worker != Thread.CurrentThread) worker.Join(2000);
+            Thread current = worker;
             worker = null;
-            stopped.Dispose();
+            if (current != null && current != Thread.CurrentThread && current.Join(3000))
+                stopped.Dispose();
         }
     }
 
