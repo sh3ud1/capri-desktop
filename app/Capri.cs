@@ -2769,15 +2769,18 @@ namespace CapriDesktop
 
         private void ShowTelegramSettings()
         {
+            // Telegram allows only one active getUpdates poller per bot token.
+            if (telegram != null) { telegram.Dispose(); telegram = null; }
             using (TelegramSettingsDialog dialog = new TelegramSettingsDialog(Voice.Unprotect(preferences.TelegramToken), preferences.TelegramUserId))
             {
-                if (dialog.ShowDialog(this) != DialogResult.OK) return;
-                preferences.TelegramToken = Voice.Protect(dialog.BotToken);
-                preferences.TelegramUserId = dialog.UserId;
-                SavePreferences();
-                if (telegram != null) { telegram.Dispose(); telegram = null; }
-                StartTelegram();
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    preferences.TelegramToken = Voice.Protect(dialog.BotToken);
+                    preferences.TelegramUserId = dialog.UserId;
+                    SavePreferences();
+                }
             }
+            StartTelegram();
         }
 
         private void StartTelegram()
