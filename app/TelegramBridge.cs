@@ -390,7 +390,7 @@ namespace CapriDesktop
         {
             byte[] bytes = new byte[4];
             using (RandomNumberGenerator random = RandomNumberGenerator.Create()) random.GetBytes(bytes);
-            return (100000 + (BitConverter.ToUInt32(bytes, 0) % 900000)).ToString();
+            return (10000000 + (BitConverter.ToUInt32(bytes, 0) % 90000000)).ToString();
         }
 
         private void PairPoll()
