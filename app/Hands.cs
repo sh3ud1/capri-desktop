@@ -3771,6 +3771,104 @@ namespace CapriDesktop
             return null;
         }
 
+        // Narrow entry points for the Telegram bridge. They reuse Capri's installed-app catalogue and
+        // window matching instead of accepting executable paths or arbitrary process names from chat.
+        internal static string TelegramApps()
+        {
+            try
+            {
+                List<InstalledApp> apps = Apps();
+                List<string> names = new List<string>();
+                foreach (InstalledApp app in apps)
+                {
+                    if (AppName(app).Length == 0 || string.IsNullOrWhiteSpace(app.Name)) continue;
+                    string name = app.Name.Trim();
+                    if (!names.Exists(saved => string.Equals(saved, name, StringComparison.OrdinalIgnoreCase))) names.Add(name);
+                }
+                names.Sort(StringComparer.CurrentCultureIgnoreCase);
+                if (names.Count == 0) return "No installed apps were found.";
+                int shown = Math.Min(names.Count, 60);
+                StringBuilder result = new StringBuilder("Installed apps:\n");
+                for (int i = 0; i < shown; i++) result.Append("• ").Append(names[i]).Append("\n");
+                if (shown < names.Count) result.Append("…and ").Append(names.Count - shown).Append(" more. Use /open followed by an app name.");
+                return result.ToString().TrimEnd();
+            }
+            catch (Exception)
+            {
+                return "Couldn't read the installed-app list right now.";
+            }
+        }
+
+        internal static string TelegramOpenApp(string wanted)
+        {
+            if (string.IsNullOrWhiteSpace(wanted)) return "Usage: /open app name";
+            try
+            {
+                string normalized = Regex.Replace(Plain(wanted), @"^the |( app| application| game)$", "");
+                List<InstalledApp> found = Match(Apps(), wanted);
+                found.RemoveAll(app => Score(app, normalized) < 2);
+                if (found.Count == 0)
+                {
+                    string nickname = Nickname(wanted);
+                    if (nickname != null)
+                    {
+                        normalized = Plain(nickname);
+                        found = Match(Apps(), nickname);
+                        found.RemoveAll(app => Score(app, normalized) < 2);
+                    }
+                }
+                if (found.Count == 0) return "No installed app exactly matches " + wanted.Trim() + ". Use /apps to see available names.";
+                if (found.Count > 1)
+                {
+                    List<string> names = new List<string>();
+                    foreach (InstalledApp app in found) names.Add(app.Name);
+                    return "That name matches several apps: " + string.Join(", ", names.ToArray()) + ". Use a more specific name.";
+                }
+                Start(found[0].Id);
+                return "Opened " + found[0].Name + ".";
+            }
+            catch (Exception)
+            {
+                return "Couldn't open that app. Check that it is installed and available.";
+            }
+        }
+
+        internal static string TelegramCloseApp(string wanted)
+        {
+            if (string.IsNullOrWhiteSpace(wanted)) return "Usage: /close app name";
+            try
+            {
+                string normalized = Regex.Replace(Plain(wanted), @"^the |( app| application| game)$", "");
+                List<InstalledApp> found = Match(Apps(), wanted);
+                found.RemoveAll(app => Score(app, normalized) < 2);
+                if (found.Count == 0) return "No installed app exactly matches " + wanted.Trim() + ". Use /apps to see available names.";
+                if (found.Count > 1)
+                {
+                    List<string> names = new List<string>();
+                    foreach (InstalledApp app in found) names.Add(app.Name);
+                    return "That name matches several apps: " + string.Join(", ", names.ToArray()) + ". Use a more specific name.";
+                }
+                string appName = AppName(found[0]);
+                if (appName == "capri" || appName == "capri desktop") return "Closing Capri remotely is disabled.";
+                List<OpenWindow> windows = WindowsNamed(appName, 2);
+                if (windows.Count == 0) return found[0].Name + " has no open window to close.";
+                int closed = 0;
+                foreach (OpenWindow window in windows) if (Apply(window, "close")) closed++;
+                return closed == 0 ? "Couldn't close " + found[0].Name + ". It may have refused the close request."
+                    : "Closed " + closed + " window(s) of " + found[0].Name + ".";
+            }
+            catch (Exception)
+            {
+                return "Couldn't close that app. It may have changed state or refused the close request.";
+            }
+        }
+
+        internal static bool TelegramLock()
+        {
+            try { return LockWorkStation(); }
+            catch (Exception) { return false; }
+        }
+
         private static string OpenApp(string wanted, Func<bool> current = null)
         {
             if (string.IsNullOrWhiteSpace(wanted)) return "Which app, choom?";
