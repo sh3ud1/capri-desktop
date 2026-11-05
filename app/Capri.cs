@@ -2420,6 +2420,7 @@ namespace CapriDesktop
             helpItem.DropDownItems.Add(checkItem);
             updateItem = new ToolStripMenuItem("Restart to update", null, delegate { InstallUpdate(); });
             menu.Items.Add(helpItem);
+            menu.Items.Add(new ToolStripMenuItem("Telegram remote access...", null, delegate { ConfigureTelegram(); }));
             foreach (ToolStripMenuItem parent in new[] { sizes, moves, helpItem })
             {
                 ToolStripDropDownMenu drop = (ToolStripDropDownMenu)parent.DropDown;
@@ -2465,6 +2466,7 @@ namespace CapriDesktop
             PrepareHusk(data);
             mainframe.VisibleChanged += delegate { mainframeOpen = mainframe.Visible && mainframe.WindowState != FormWindowState.Minimized; };
             mainframe.Resize += delegate { mainframeOpen = mainframe.Visible && mainframe.WindowState != FormWindowState.Minimized; };
+            StartTelegramBridge();
             voice.Key = Voice.Unprotect(preferences.VoiceKey);
             Hands.Look = LookAt;
             Hands.LookOn = LookAt;
@@ -13565,6 +13567,7 @@ namespace CapriDesktop
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
+            StopTelegramBridge();
             if (husk != null) husk.Dispose();
             HuskClonesOff();
             ClearMarks();
