@@ -129,6 +129,7 @@ namespace CapriDesktop
                             int mention = head.IndexOf('@');
                             if (mention >= 0) head = head.Substring(0, mention);
                             string verb = head.ToLowerInvariant();
+                            Brain.Log("telegram", -1, "Accepted remote command " + verb);
 
                             if (verb == "/start" || verb == "/help")
                                 Send(message.chat.id, "Capri is linked. Commands:\n/status — connection status\n/apps — list installed apps\n/open name — open an installed app\n/close name — close its windows\n/screenshot — send a screenshot\n/lock — lock this PC");
@@ -334,7 +335,7 @@ namespace CapriDesktop
             MinimizeBox = false;
             MaximizeBox = false;
             ShowInTaskbar = false;
-            ClientSize = new System.Drawing.Size(450, 220);
+            ClientSize = new System.Drawing.Size(450, 260);
 
             Label heading = new Label { Left = 16, Top = 14, Width = 415, Height = 22, Text = "Telegram bot token" };
             tokenBox = new TextBox { Left = 16, Top = 40, Width = 415, UseSystemPasswordChar = true, Text = savedToken ?? "" };
@@ -342,10 +343,21 @@ namespace CapriDesktop
                 Text = "The token is encrypted on this PC. Never share it or commit it to GitHub." };
             status = new Label { Left = 16, Top = 115, Width = 415, Height = 38,
                 Text = savedId > 0 ? "Linked Telegram user ID: " + savedId : "Not linked yet." };
-            pair = new Button { Left = 16, Top = 170, Width = 155, Height = 30, Text = "Generate pairing code" };
-            confirm = new Button { Left = 181, Top = 170, Width = 155, Height = 30, Text = "Save and connect", Enabled = savedId > 0 && !string.IsNullOrEmpty(savedToken) };
-            Button cancel = new Button { Left = 341, Top = 170, Width = 90, Height = 30, Text = "Close", DialogResult = DialogResult.Cancel };
-            Controls.AddRange(new Control[] { heading, tokenBox, note, status, pair, confirm, cancel });
+            Button emergency = new Button { Left = 16, Top = 165, Width = 155, Height = 30,
+                Text = "Emergency stop", Enabled = savedId > 0 && !string.IsNullOrEmpty(savedToken) };
+            pair = new Button { Left = 16, Top = 210, Width = 155, Height = 30, Text = "Generate pairing code" };
+            confirm = new Button { Left = 181, Top = 210, Width = 155, Height = 30, Text = "Save and connect", Enabled = savedId > 0 && !string.IsNullOrEmpty(savedToken) };
+            Button cancel = new Button { Left = 341, Top = 210, Width = 90, Height = 30, Text = "Close", DialogResult = DialogResult.Cancel };
+            Controls.AddRange(new Control[] { heading, tokenBox, note, status, emergency, pair, confirm, cancel });
+            emergency.Click += delegate
+            {
+                if (MessageBox.Show(this, "This stops Telegram remote access and removes its saved connection from this PC. You can set it up again later.",
+                    "Emergency stop", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                {
+                    DialogResult = DialogResult.Abort;
+                    Close();
+                }
+            };
             tokenBox.TextChanged += delegate { confirm.Enabled = UserId > 0 && !string.IsNullOrEmpty(BotToken); };
             pair.Click += PairClick;
             confirm.Click += delegate
@@ -500,9 +512,11 @@ namespace CapriDesktop
             TelegramSavedSettings saved = ReadTelegramSettings();
             string token = saved == null ? null : Voice.Unprotect(saved.ProtectedToken);
             long userId = saved == null ? 0 : saved.UserId;
+            bool restart = true;
             using (TelegramSettingsDialog dialog = new TelegramSettingsDialog(token, userId))
             {
-                if (dialog.ShowDialog(this) == DialogResult.OK)
+                DialogResult result = dialog.ShowDialog(this);
+                if (result == DialogResult.OK)
                 {
                     try
                     {
@@ -514,8 +528,23 @@ namespace CapriDesktop
                             "Capri · Telegram", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
                 }
+                else if (result == DialogResult.Abort)
+                {
+                    restart = false;
+                    try
+                    {
+                        if (File.Exists(TelegramSettingsPath)) File.Delete(TelegramSettingsPath);
+                        MessageBox.Show(this, "Telegram remote access has been disabled on this PC.",
+                            "Capri · Telegram", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception)
+                    {
+                        MessageBox.Show(this, "Telegram was stopped for this session, but its saved settings couldn't be deleted. Check the Capri data folder.",
+                            "Capri · Telegram", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
             }
-            StartTelegramBridge();
+            if (restart) StartTelegramBridge();
         }
     }
 }
